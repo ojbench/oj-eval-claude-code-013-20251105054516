@@ -1,0 +1,1 @@
+test_one: data/one/code.cpp:21: Integer& Integer::operator=(const Integer&): Assertion `false' failed.

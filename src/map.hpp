@@ -23,11 +23,11 @@ template<
   private:
    struct Node {
        value_type data;
-       Node *left, *right;
+       Node *left, *right, *parent;
        int height;
 
        Node(const value_type &val)
-           : data(val), left(nullptr), right(nullptr), height(1) {}
+           : data(val), left(nullptr), right(nullptr), parent(nullptr), height(1) {}
    };
 
    Node *root;
@@ -56,6 +56,10 @@ template<
        x->right = y;
        y->left = T2;
 
+       if (T2) T2->parent = y;
+       x->parent = y->parent;
+       y->parent = x;
+
        updateHeight(y);
        updateHeight(x);
 
@@ -68,6 +72,10 @@ template<
 
        y->left = x;
        x->right = T2;
+
+       if (T2) T2->parent = x;
+       y->parent = x->parent;
+       x->parent = y;
 
        updateHeight(x);
        updateHeight(y);
@@ -84,19 +92,53 @@ template<
 
        if (balance > 1) {
            if (getBalance(node->left) >= 0) {
-               return rightRotate(node);
+               Node *newRoot = rightRotate(node);
+               if (newRoot->parent) {
+                   if (newRoot->parent->left == node) {
+                       newRoot->parent->left = newRoot;
+                   } else {
+                       newRoot->parent->right = newRoot;
+                   }
+               }
+               return newRoot;
            } else {
                node->left = leftRotate(node->left);
-               return rightRotate(node);
+               node->left->parent = node;
+               Node *newRoot = rightRotate(node);
+               if (newRoot->parent) {
+                   if (newRoot->parent->left == node) {
+                       newRoot->parent->left = newRoot;
+                   } else {
+                       newRoot->parent->right = newRoot;
+                   }
+               }
+               return newRoot;
            }
        }
 
        if (balance < -1) {
            if (getBalance(node->right) <= 0) {
-               return leftRotate(node);
+               Node *newRoot = leftRotate(node);
+               if (newRoot->parent) {
+                   if (newRoot->parent->left == node) {
+                       newRoot->parent->left = newRoot;
+                   } else {
+                       newRoot->parent->right = newRoot;
+                   }
+               }
+               return newRoot;
            } else {
                node->right = rightRotate(node->right);
-               return leftRotate(node);
+               node->right->parent = node;
+               Node *newRoot = leftRotate(node);
+               if (newRoot->parent) {
+                   if (newRoot->parent->left == node) {
+                       newRoot->parent->left = newRoot;
+                   } else {
+                       newRoot->parent->right = newRoot;
+                   }
+               }
+               return newRoot;
            }
        }
 
@@ -111,8 +153,10 @@ template<
 
        if (comp(value.first, node->data.first)) {
            node->left = insertNode(node->left, value);
+           node->left->parent = node;
        } else if (comp(node->data.first, value.first)) {
            node->right = insertNode(node->right, value);
+           node->right->parent = node;
        } else {
            return node;
        }
@@ -132,8 +176,10 @@ template<
 
        if (comp(key, node->data.first)) {
            node->left = eraseNode(node->left, key);
+           if (node->left) node->left->parent = node;
        } else if (comp(node->data.first, key)) {
            node->right = eraseNode(node->right, key);
+           if (node->right) node->right->parent = node;
        } else {
            if (!node->left || !node->right) {
                Node *temp = node->left ? node->left : node->right;
@@ -143,20 +189,24 @@ template<
                    mapSize--;
                    return nullptr;
                } else {
-                   Node *result = temp;
+                   temp->parent = node->parent;
                    delete node;
                    mapSize--;
-                   return result;
+                   return temp;
                }
            } else {
                Node *temp = findMin(node->right);
                const_cast<Key&>(node->data.first) = temp->data.first;
                    node->data.second = temp->data.second;
                node->right = eraseNode(node->right, temp->data.first);
+               if (node->right) node->right->parent = node;
            }
        }
 
-       return balanceNode(node);
+       Node *result = balanceNode(node);
+       if (result && result->left) result->left->parent = result;
+       if (result && result->right) result->right->parent = result;
+       return result;
    }
 
    void destroy(Node *node) {
@@ -173,6 +223,8 @@ template<
        node->left = copyNode(other->left);
        node->right = copyNode(other->right);
        node->height = other->height;
+       if (node->left) node->left->parent = node;
+       if (node->right) node->right->parent = node;
        return node;
    }
 
@@ -197,7 +249,7 @@ template<
        map *container;
        Node *node;
 
-       Node* findInorderSuccessor(Node *n, Node *root) {
+       Node* findInorderSuccessor(Node *n) {
            if (!n) return nullptr;
 
            if (n->right) {
@@ -208,22 +260,15 @@ template<
                return curr;
            }
 
-           Node *succ = nullptr;
-           Node *curr = root;
-           while (curr) {
-               if (container->comp(n->data.first, curr->data.first)) {
-                   succ = curr;
-                   curr = curr->left;
-               } else if (container->comp(curr->data.first, n->data.first)) {
-                   curr = curr->right;
-               } else {
-                   break;
-               }
+           Node *p = n->parent;
+           while (p && n == p->right) {
+               n = p;
+               p = p->parent;
            }
-           return succ;
+           return p;
        }
 
-       Node* findInorderPredecessor(Node *n, Node *root) {
+       Node* findInorderPredecessor(Node *n) {
            if (!n) return nullptr;
 
            if (n->left) {
@@ -234,19 +279,12 @@ template<
                return curr;
            }
 
-           Node *pred = nullptr;
-           Node *curr = root;
-           while (curr) {
-               if (container->comp(n->data.first, curr->data.first)) {
-                   curr = curr->left;
-               } else if (container->comp(curr->data.first, n->data.first)) {
-                   pred = curr;
-                   curr = curr->right;
-               } else {
-                   break;
-               }
+           Node *p = n->parent;
+           while (p && n == p->left) {
+               n = p;
+               p = p->parent;
            }
-           return pred;
+           return p;
        }
 
       public:
@@ -261,7 +299,7 @@ template<
                throw invalid_iterator();
            }
            iterator tmp = *this;
-           node = findInorderSuccessor(node, container->root);
+           node = findInorderSuccessor(node);
            return tmp;
        }
 
@@ -269,7 +307,7 @@ template<
            if (!node || !container) {
                throw invalid_iterator();
            }
-           node = findInorderSuccessor(node, container->root);
+           node = findInorderSuccessor(node);
            return *this;
        }
 
@@ -286,7 +324,7 @@ template<
                    }
                }
            } else {
-               node = findInorderPredecessor(node, container->root);
+               node = findInorderPredecessor(node);
            }
            if (!node) {
                throw invalid_iterator();
@@ -306,7 +344,7 @@ template<
                    }
                }
            } else {
-               node = findInorderPredecessor(node, container->root);
+               node = findInorderPredecessor(node);
            }
            if (!node) {
                throw invalid_iterator();
@@ -350,7 +388,7 @@ template<
        const map *container;
        Node *node;
 
-       Node* findInorderSuccessor(Node *n, Node *root) {
+       Node* findInorderSuccessor(Node *n) {
            if (!n) return nullptr;
 
            if (n->right) {
@@ -361,22 +399,15 @@ template<
                return curr;
            }
 
-           Node *succ = nullptr;
-           Node *curr = root;
-           while (curr) {
-               if (container->comp(n->data.first, curr->data.first)) {
-                   succ = curr;
-                   curr = curr->left;
-               } else if (container->comp(curr->data.first, n->data.first)) {
-                   curr = curr->right;
-               } else {
-                   break;
-               }
+           Node *p = n->parent;
+           while (p && n == p->right) {
+               n = p;
+               p = p->parent;
            }
-           return succ;
+           return p;
        }
 
-       Node* findInorderPredecessor(Node *n, Node *root) {
+       Node* findInorderPredecessor(Node *n) {
            if (!n) return nullptr;
 
            if (n->left) {
@@ -387,19 +418,12 @@ template<
                return curr;
            }
 
-           Node *pred = nullptr;
-           Node *curr = root;
-           while (curr) {
-               if (container->comp(n->data.first, curr->data.first)) {
-                   curr = curr->left;
-               } else if (container->comp(curr->data.first, n->data.first)) {
-                   pred = curr;
-                   curr = curr->right;
-               } else {
-                   break;
-               }
+           Node *p = n->parent;
+           while (p && n == p->left) {
+               n = p;
+               p = p->parent;
            }
-           return pred;
+           return p;
        }
 
       public:
@@ -416,7 +440,7 @@ template<
                throw invalid_iterator();
            }
            const_iterator tmp = *this;
-           node = findInorderSuccessor(node, container->root);
+           node = findInorderSuccessor(node);
            return tmp;
        }
 
@@ -424,7 +448,7 @@ template<
            if (!node || !container) {
                throw invalid_iterator();
            }
-           node = findInorderSuccessor(node, container->root);
+           node = findInorderSuccessor(node);
            return *this;
        }
 
@@ -441,7 +465,7 @@ template<
                    }
                }
            } else {
-               node = findInorderPredecessor(node, container->root);
+               node = findInorderPredecessor(node);
            }
            if (!node) {
                throw invalid_iterator();
@@ -461,7 +485,7 @@ template<
                    }
                }
            } else {
-               node = findInorderPredecessor(node, container->root);
+               node = findInorderPredecessor(node);
            }
            if (!node) {
                throw invalid_iterator();
